@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+
+      - name: Download dependencies
+        run: |
+          go mod download
+          go mod tidy
+
+      - name: Build binaries
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o speed-test-linux-amd64 main.go
+          GOOS=linux GOARCH=arm64 go build -o speed-test-linux-arm64 main.go
+          GOOS=linux GOARCH=arm GOARM=7 go build -o speed-test-linux-armv7 main.go
+          GOOS=darwin GOARCH=amd64 go build -o speed-test-darwin-amd64 main.go
+          GOOS=darwin GOARCH=arm64 go build -o speed-test-darwin-arm64 main.go
+          GOOS=windows GOARCH=amd64 go build -o speed-test-windows-amd64.exe main.go
+
+      - name: Create checksums
+        run: |
+          sha256sum speed-test-* > checksums.txt
+
+      - name: Upload binaries
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            speed-test-*
+            checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
+          platforms: linux/amd64,linux/arm64

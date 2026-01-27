@@ -1,0 +1,27 @@
+# Binaries
+speed-test
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*-test
+
+# Coverage
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+go.work

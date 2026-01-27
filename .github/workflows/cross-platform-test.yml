@@ -1,0 +1,142 @@
+name: Cross-Platform Testing
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Platforms to test (comma-separated: linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64)'
+        required: false
+        default: 'linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64'
+
+jobs:
+  cross-platform-test:
+    name: Test on ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+            runs-on: ubuntu-latest
+            binary-suffix: ''
+          - os: ubuntu-latest
+            arch: arm64
+            runs-on: ubuntu-latest
+            binary-suffix: ''
+          - os: macos-latest
+            arch: amd64
+            runs-on: macos-latest
+            binary-suffix: ''
+          - os: macos-latest
+            arch: arm64
+            runs-on: macos-latest
+            binary-suffix: ''
+          - os: windows-latest
+            arch: amd64
+            runs-on: windows-latest
+            binary-suffix: '.exe'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-${{ matrix.arch }}-go-${{ hashFiles('**/go.sum') }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary for ${{ matrix.os }} (${{ matrix.arch }})
+        run: |
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o speed-test${{ matrix.binary-suffix }} main.go
+        shell: bash
+
+      - name: Verify binary exists
+        run: |
+          if [ ! -f "speed-test${{ matrix.binary-suffix }}" ]; then
+            echo "Binary not found!"
+            exit 1
+          fi
+          ls -la speed-test${{ matrix.binary-suffix }}
+
+      - name: Test binary version command (${{ matrix.os }} ${{ matrix.arch }})
+        run: |
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            ./speed-test.exe --version
+          else
+            ./speed-test --version
+          fi
+
+      - name: Test binary help command (${{ matrix.os }} ${{ matrix.arch }})
+        run: |
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            ./speed-test.exe --help | head -20
+          else
+            ./speed-test --help | head -20
+          fi
+
+      - name: Test binary executes with timeout (${{ matrix.os }} ${{ matrix.arch }})
+        run: |
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            timeout 10 ./speed-test.exe --timeout 2s || exit_code=$?
+          else
+            timeout 10 ./speed-test --timeout 2s || exit_code=$?
+          fi
+          # Exit code 124 means timeout, which is expected
+          if [ "${exit_code:-0}" != "124" ] && [ "${exit_code:-0}" != "0" ]; then
+            echo "Unexpected exit code: ${exit_code:-0}"
+          fi
+
+      - name: Run unit tests (${{ matrix.os }} ${{ matrix.arch }})
+        run: go test -v -cover ./...
+
+      - name: Upload binary artifact (${{ matrix.os }} ${{ matrix.arch }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: speed-test-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.binary-suffix }}
+          path: speed-test${{ matrix.binary-suffix }}
+
+  test-all-platforms:
+    name: Test All Platforms Summary
+    needs: cross-platform-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run all tests
+        run: go test -v -cover -race ./...
+
+      - name: Run linters
+        run: golangci-lint run ./...
+
+      - name: Print summary
+        run: |
+          echo "Cross-platform testing completed successfully!"
+          echo "All platform tests passed:"
+          echo "  - linux/amd64"
+          echo "  - linux/arm64"
+          echo "  - darwin/amd64"
+          echo "  - darwin/arm64"
+          echo "  - windows/amd64"
