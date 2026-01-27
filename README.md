@@ -107,6 +107,7 @@ $ speed-test --server 1234
 | `--bytes` | `-b` | Output in megabytes per second (MBps) |
 | `--verbose` | `-v` | Output detailed information including server details |
 | `--server` | `-s` | Specify a server ID to use for testing |
+| `--servers` | `-n` | Number of closest servers to test for selection (default: 5) |
 | `--timeout` | `-t` | Timeout for the speed test (default: 30s) |
 | `--help` | `-h` | Show help information |
 | `--version` | `-V` | Show version information |
