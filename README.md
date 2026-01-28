@@ -19,6 +19,8 @@ A high-performance CLI tool written in Go that tests your internet connection sp
 
 ---
 
+</div>
+
 ## ✨ Features
 
 - 🚀 **Fast and Efficient** - Built in Go for optimal performance
