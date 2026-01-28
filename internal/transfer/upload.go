@@ -90,28 +90,42 @@ func (ut *UploadTest) Run(ctx context.Context, serverURL string, progress chan<-
 				default:
 				}
 
-				url := fmt.Sprintf("%s/speedtest/upload.php", serverURL)
-
-				req, err := http.NewRequestWithContext(testCtx, "POST", url, bytes.NewReader(uploadData))
-				if err != nil {
-					continue
-				}
-				req.Header.Set("Content-Type", "application/octet-stream")
-
-				resp, err := ut.client.Do(req)
-				if err != nil {
-					continue
+				// Try different upload endpoints
+				uploadURLs := []string{
+					fmt.Sprintf("%s/speedtest/upload.php", serverURL),
+					fmt.Sprintf("%s/upload.php", serverURL),
 				}
 
-				// Read response to ensure upload completed
-				_, _ = io.Copy(io.Discard, resp.Body)
-				resp.Body.Close()
+				success := false
+				for _, url := range uploadURLs {
+					req, err := http.NewRequestWithContext(testCtx, "POST", url, bytes.NewReader(uploadData))
+					if err != nil {
+						continue
+					}
+					req.Header.Set("Content-Type", "application/octet-stream")
+					req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-				if resp.StatusCode == http.StatusOK {
-					mu.Lock()
-					totalBytes += ut.uploadSize
-					rateCalc.SetBytes(ut.uploadSize)
-					mu.Unlock()
+					resp, err := ut.client.Do(req)
+					if err != nil {
+						continue
+					}
+
+					// Read response to complete the request
+					io.Copy(io.Discard, resp.Body)
+					resp.Body.Close()
+
+					if resp.StatusCode == http.StatusOK {
+						mu.Lock()
+						rateCalc.SetBytes(ut.uploadSize)
+						totalBytes += ut.uploadSize
+						mu.Unlock()
+						success = true
+						break
+					}
+				}
+
+				if success {
+					break
 				}
 			}
 		}(i)

@@ -31,9 +31,6 @@ func NewDownloadTest() *DownloadTest {
 
 // Run executes the download test
 func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan<- ProgressInfo) error {
-	// Generate random size for download test
-	sizes := []int{100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500}
-
 	rateCalc := NewRateCalculator()
 	rateCalc.Start()
 
@@ -61,7 +58,7 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 					progress <- ProgressInfo{
 						Rate:       rateCalc.Rate(),
 						BytesTotal: totalBytes,
-						Progress:   0.5, // Placeholder
+						Progress:   0.5,
 					}
 				}
 			}
@@ -71,6 +68,16 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 	// Create cancellation context with timeout
 	testCtx, cancel := context.WithTimeout(ctx, dt.testDuration)
 	defer cancel()
+
+	// Try different URL patterns for download test
+	urlPatterns := []string{
+		"%s/speedtest/random%dx%d.jpg",
+		"%s/speedtest/random%dx%d.png",
+		"%s/speedtest/garbage.php",
+		"%s/speedtest/upload.php",
+	}
+
+	sizes := []int{100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500}
 
 	// Run download threads
 	for i := 0; i < dt.numThreads; i++ {
@@ -85,38 +92,47 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 				default:
 				}
 
-				// Select random size
 				size := sizes[threadID%len(sizes)]
-				url := fmt.Sprintf("%s/speedtest/random%dX%d.jpg", serverURL, size, size)
 
-				req, err := http.NewRequestWithContext(testCtx, "GET", url, nil)
-				if err != nil {
-					continue
-				}
+				success := false
+				for _, pattern := range urlPatterns {
+					url := fmt.Sprintf(pattern, serverURL, size, size)
 
-				resp, err := dt.client.Do(req)
-				if err != nil {
-					continue
-				}
-
-				// Read response to measure download speed
-				buf := make([]byte, 32*1024)
-				for {
-					n, err := resp.Body.Read(buf)
-					if n > 0 {
-						mu.Lock()
-						rateCalc.SetBytes(int64(n))
-						totalBytes += int64(n)
-						mu.Unlock()
-					}
+					req, err := http.NewRequestWithContext(testCtx, "GET", url, nil)
 					if err != nil {
-						if err != io.EOF {
-							// Log error but continue
+						continue
+					}
+					req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+					resp, err := dt.client.Do(req)
+					if err != nil {
+						continue
+					}
+
+					if resp.StatusCode == http.StatusOK {
+						buf := make([]byte, 32*1024)
+						for {
+							n, err := resp.Body.Read(buf)
+							if n > 0 {
+								mu.Lock()
+								rateCalc.SetBytes(int64(n))
+								totalBytes += int64(n)
+								mu.Unlock()
+								success = true
+							}
+							if err != nil {
+								if err != io.EOF {
+								}
+								break
+							}
 						}
+					}
+					resp.Body.Close()
+
+					if success {
 						break
 					}
 				}
-				resp.Body.Close()
 			}
 		}(i)
 	}
