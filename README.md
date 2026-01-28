@@ -54,12 +54,6 @@ chmod +x speed-test
 sudo mv speed-test /usr/local/bin/
 ```
 
-### Homebrew (macOS/Linux)
-
-```bash
-brew install speed-test-go
-```
-
 ### Docker
 
 ```bash
