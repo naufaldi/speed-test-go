@@ -1,35 +1,53 @@
+<div align="center">
+
+![Go Version](https://img.shields.io/badge/Go-1.25-blue?logo=go)
+![Platforms](https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue?logo=linux&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen)
+
+---
+
 # Speed Test CLI
 
-A high-performance CLI tool written in Go that tests your internet connection speed (download and upload) and ping latency. This is a rewrite of the popular [sindresorhus/speed-test](https://github.com/sindresorhus/speed-test) Node.js CLI tool, implementing the speedtest.net protocol from scratch in pure Go.
+A high-performance CLI tool written in Go that tests your internet connection speed (download and upload) and ping latency. This is a pure Go rewrite of the popular [sindresorhus/speed-test](https://github.com/sindresorhus/speed-test) Node.js CLI tool.
 
-## Features
+<a href="https://bit.ly/49t6aTh">
+  <img src="docs/minimax-banner.png" alt="Get Discount Coding Plan 12$" width="100%">
+</a>
 
-- **Fast and Efficient**: Built in Go for optimal performance
-- **Single Binary**: No runtime dependencies required
-- **Cross-Platform**: Works on Linux, macOS, and Windows
-- **Multiple Output Formats**: Human-readable, JSON, and verbose modes
-- **Real-Time Progress**: Live speed updates during tests
+**[Get 12$ Discount →](https://bit.ly/49t6aTh)**
 
-## Installation
+---
+
+## ✨ Features
+
+- 🚀 **Fast and Efficient** - Built in Go for optimal performance
+- 📦 **Single Binary** - No runtime dependencies required
+- 🌐 **Cross-Platform** - Works on Linux, macOS, and Windows
+- 📊 **Multiple Output Formats** - Human-readable, JSON, and verbose modes
+- ⚡ **Multi-threaded Tests** - Concurrent download/upload with 4 threads
+- 🎯 **Smart Server Selection** - Ping-based selection from closest servers
+
+## 📦 Installation
 
 ### Go Install
 
 ```bash
-go install github.com/user/speed-test-go@latest
+go install github.com/naufaldi/speed-test-go@latest
 ```
 
 ### Download Binary
 
-Download pre-built binaries from the [releases page](https://github.com/user/speed-test-go/releases):
+Download pre-built binaries from the [releases page](https://github.com/naufaldi/speed-test-go/releases):
 
 ```bash
 # Linux (amd64)
-wget https://github.com/user/speed-test-go/releases/download/v1.0.0/speed-test-linux-amd64
+wget https://github.com/naufaldi/speed-test-go/releases/download/v1.0.0/speed-test-linux-amd64
 chmod +x speed-test-linux-amd64
 sudo mv speed-test-linux-amd64 /usr/local/bin/speed-test
 
 # macOS (arm64)
-curl -L https://github.com/user/speed-test-go/releases/download/v1.0.0/speed-test-darwin-arm64 -o speed-test
+curl -L https://github.com/naufaldi/speed-test-go/releases/download/v1.0.0/speed-test-darwin-arm64 -o speed-test
 chmod +x speed-test
 sudo mv speed-test /usr/local/bin/
 ```
@@ -43,10 +61,10 @@ brew install speed-test-go
 ### Docker
 
 ```bash
-docker run --rm ghcr.io/user/speed-test-go
+docker run --rm ghcr.io/naufaldi/speed-test-go
 ```
 
-## Usage
+## 🚀 Usage
 
 ### Basic Speed Test
 
@@ -62,7 +80,7 @@ $ speed-test
 ```bash
 $ speed-test --json
 {
-  "timestamp": "2026-01-26T10:30:00Z",
+  "timestamp": "2026-01-28T10:30:00Z",
   "ping": {
     "jitter": 1.022,
     "latency": 24.5
@@ -96,7 +114,11 @@ $ speed-test --verbose
 ### Specify Server
 
 ```bash
+# Use specific server ID
 $ speed-test --server 1234
+
+# Test only top 3 closest servers
+$ speed-test --servers 3
 ```
 
 ### Options
@@ -110,29 +132,9 @@ $ speed-test --server 1234
 | `--servers` | `-n` | Number of closest servers to test for selection (default: 5) |
 | `--timeout` | `-t` | Timeout for the speed test (default: 30s) |
 | `--help` | `-h` | Show help information |
-| `--version` | `-V` | Show version information |
+| `version` | `-V` | Print version number |
 
-### Help
-
-```bash
-$ speed-test --help
-Test your internet connection speed and ping using speedtest.net from the CLI.
-    
-Supports multiple output formats and configuration options.
-
-Usage:
-  speed-test [flags]
-
-Flags:
-  -b, --bytes              Output the result in megabytes per second (MBps)
-  -h, --help               help for speed-test
-  -j, --json               Output the result as JSON
-  -s, --server string      Specify a server ID to use
-  -t, --timeout duration   Timeout for the speed test (default 30s)
-  -v, --verbose            Output more detailed information
-```
-
-## Building
+## 🛠️ Building
 
 ### Prerequisites
 
@@ -165,7 +167,16 @@ make lint
 make help
 ```
 
-## Development
+## 🏗️ Architecture
+
+### Test Flow
+
+1. **Server Discovery** - Fetch list of speed test servers from speedtest.net
+2. **User Location** - Detect user's IP and geographic location
+3. **Server Selection** - Calculate distances and ping top N closest servers
+4. **Ping Test** - Measure latency to selected server (5 requests)
+5. **Download Test** - Measure download bandwidth (4 threads)
+6. **Upload Test** - Measure upload bandwidth (4 threads)
 
 ### Project Structure
 
@@ -178,7 +189,7 @@ speed-test-go/
 │   ├── location/         # User location detection
 │   ├── network/          # HTTP client
 │   ├── output/           # Output formatting
-│   ├── server/           # Server discovery
+│   ├── server/           # Server discovery & selection
 │   ├── test/             # Test runner
 │   └── transfer/         # Download/upload tests
 ├── pkg/                   # Public packages
@@ -190,7 +201,14 @@ speed-test-go/
 └── README.md             # This file
 ```
 
-### Contributing
+## 📊 Performance
+
+- **Binary Size**: ~11-12MB
+- **Memory Usage**: < 50MB
+- **Test Duration**: < 30 seconds
+- **Code Coverage**: > 80%
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -198,66 +216,24 @@ speed-test-go/
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-### Running Tests
-
-```bash
-# Run all tests with coverage
-make test
-
-# Run specific package tests
-go test -v ./internal/...
-
-# Run with race detector
-go test -race ./...
-```
-
-### Code Style
-
-This project uses:
-- [golangci-lint](https://golangci-lint.run/) for linting
-- [gofumpt](https://github.com/mvdan/gofumpt) for formatting
-- Standard Go conventions
-
-```bash
-# Format code
-gofumpt -w .
-
-# Run linters
-make lint
-```
-
-## Architecture
-
-### Test Flow
-
-1. **Server Discovery**: Fetch list of speed test servers from speedtest.net
-2. **User Location**: Detect user's IP and geographic location
-3. **Server Selection**: Calculate distances and select nearest server
-4. **Ping Test**: Measure latency to selected server (5 requests)
-5. **Download Test**: Measure download bandwidth (multi-threaded)
-6. **Upload Test**: Measure upload bandwidth (multi-threaded)
-
-### Output Formats
-
-The CLI supports three output modes:
-
-1. **Human-Readable**: Default format matching sindresorhus/speed-test
-2. **JSON**: Structured output for scripting (`--json`)
-3. **Verbose**: Detailed output with server information (`--verbose`)
-
-## Performance
-
-- **Binary Size**: < 10MB
-- **Memory Usage**: < 50MB
-- **Test Duration**: < 30 seconds
-- **Code Coverage**: > 80%
-
-## License
+## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
 - [sindresorhus/speed-test](https://github.com/sindresorhus/speed-test) - Original Node.js CLI inspiration
 - [showwin/speedtest-go](https://github.com/showwin/speedtest-go) - Protocol implementation reference
 - [speedtest.net](https://www.speedtest.net) - Speed test service and API
+
+---
+
+<div align="center">
+
+**Built with ❤️ by [naufaldi](https://github.com/naufaldi)**
+
+[![GitHub stars](https://img.shields.io/github/stars/naufaldi/speed-test-go?style=social)](https://github.com/naufaldi/speed-test-go)
+[![GitHub forks](https://img.shields.io/github/forks/naufaldi/speed-test-go?style=social)](https://github.com/naufaldi/speed-test-go)
+[![GitHub issues](https://img.shields.io/github/issues/naufaldi/speed-test-go)](https://github.com/naufaldi/speed-test-go/issues)
+
+</div>
