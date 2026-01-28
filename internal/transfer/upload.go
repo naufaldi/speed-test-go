@@ -26,10 +26,10 @@ type UploadTest struct {
 func NewUploadTest() *UploadTest {
 	return &UploadTest{
 		client:       network.UploadClient(),
-		numThreads:   4,
-		testDuration: 10 * time.Second,
+		numThreads:   2,
+		testDuration: 20 * time.Second,
 		captureFreq:  100 * time.Millisecond,
-		uploadSize:   32 * 1024 * 1024, // 32MB per thread
+		uploadSize:   1 * 1024 * 1024, // 1MB per thread
 	}
 }
 
@@ -41,41 +41,21 @@ func (ut *UploadTest) Run(ctx context.Context, serverURL string, progress chan<-
 	var totalBytes int64
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	progressChan := make(chan ProgressInfo, 10)
 
-	// Start progress reporter
-	go func() {
-		ticker := time.NewTicker(ut.captureFreq)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case p := <-progressChan:
-				totalBytes = p.BytesTotal
-				if progress != nil {
-					progress <- p
-				}
-			case <-ticker.C:
-				if progress != nil {
-					progress <- ProgressInfo{
-						Rate:       rateCalc.Rate(),
-						BytesTotal: totalBytes,
-						Progress:   0.5, // Placeholder
-					}
-				}
-			}
-		}
-	}()
-
-	// Create cancellation context with timeout
-	testCtx, cancel := context.WithTimeout(ctx, ut.testDuration)
-	defer cancel()
+	// Try speedtest.net URLs first, then public echo servers
+	uploadURLs := []string{
+		fmt.Sprintf("%s/speedtest/upload.php", serverURL),
+		fmt.Sprintf("%s/upload.php", serverURL),
+		"https://httpbin.org/post",
+	}
 
 	// Generate random upload data
 	uploadData := make([]byte, ut.uploadSize)
 	rand.Read(uploadData)
+
+	// Create cancellation context with timeout
+	testCtx, cancel := context.WithTimeout(ctx, ut.testDuration)
+	defer cancel()
 
 	// Run upload threads
 	for i := 0; i < ut.numThreads; i++ {
@@ -88,12 +68,6 @@ func (ut *UploadTest) Run(ctx context.Context, serverURL string, progress chan<-
 				case <-testCtx.Done():
 					return
 				default:
-				}
-
-				// Try different upload endpoints
-				uploadURLs := []string{
-					fmt.Sprintf("%s/speedtest/upload.php", serverURL),
-					fmt.Sprintf("%s/upload.php", serverURL),
 				}
 
 				success := false
@@ -119,6 +93,19 @@ func (ut *UploadTest) Run(ctx context.Context, serverURL string, progress chan<-
 						rateCalc.SetBytes(ut.uploadSize)
 						totalBytes += ut.uploadSize
 						mu.Unlock()
+
+						// Send progress update
+						if progress != nil {
+							select {
+							case progress <- ProgressInfo{
+								Rate:       rateCalc.Rate(),
+								BytesTotal: totalBytes,
+								Progress:   0.5,
+							}:
+							case <-testCtx.Done():
+							case <-ctx.Done():
+							}
+						}
 						success = true
 						break
 					}
@@ -135,11 +122,7 @@ func (ut *UploadTest) Run(ctx context.Context, serverURL string, progress chan<-
 
 	// Send final progress
 	if progress != nil {
-		progress <- ProgressInfo{
-			Rate:       rateCalc.Rate(),
-			BytesTotal: totalBytes,
-			Progress:   1.0,
-		}
+		close(progress)
 	}
 
 	return nil
@@ -171,18 +154,25 @@ func RunSimpleUploadTest(ctx context.Context, serverURL string) (*UploadResult, 
 		errChan <- ut.Run(ctx, serverURL, progress)
 	}()
 
+	// Wait for completion or timeout
 	select {
 	case err := <-errChan:
 		result.Elapsed = time.Since(start)
+		// Get last progress
+		for p := range progress {
+			result.Bytes = p.BytesTotal
+			result.Bandwidth = int64(p.Rate)
+		}
 		if err != nil {
 			return nil, err
 		}
 	case <-ctx.Done():
 		result.Elapsed = time.Since(start)
+		for p := range progress {
+			result.Bytes = p.BytesTotal
+			result.Bandwidth = int64(p.Rate)
+		}
 		return result, ctx.Err()
-	case p := <-progress:
-		result.Bytes = p.BytesTotal
-		result.Bandwidth = int64(p.Rate)
 	}
 
 	return result, nil

@@ -29,6 +29,12 @@ func NewDownloadTest() *DownloadTest {
 	}
 }
 
+// Fallback test file URLs when speedtest.net servers don't support full protocol
+var downloadTestURLs = []string{
+	"http://proof.ovh.net/files/1Mb.dat",
+	"http://speed.hetzner.de/1MB.bin",
+}
+
 // Run executes the download test
 func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan<- ProgressInfo) error {
 	rateCalc := NewRateCalculator()
@@ -37,47 +43,19 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 	var totalBytes int64
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	progressChan := make(chan ProgressInfo, 10)
 
-	// Start progress reporter
-	go func() {
-		ticker := time.NewTicker(dt.captureFreq)
-		defer ticker.Stop()
+	// Try speedtest.net URLs first
+	speedtestURLs := []string{
+		fmt.Sprintf("%s/speedtest/random%dx%d.jpg", serverURL, 1000, 1000),
+		fmt.Sprintf("%s/speedtest/random%dx%d.jpg", serverURL, 500, 500),
+	}
 
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case p := <-progressChan:
-				totalBytes = p.BytesTotal
-				if progress != nil {
-					progress <- p
-				}
-			case <-ticker.C:
-				if progress != nil {
-					progress <- ProgressInfo{
-						Rate:       rateCalc.Rate(),
-						BytesTotal: totalBytes,
-						Progress:   0.5,
-					}
-				}
-			}
-		}
-	}()
+	// Try speedtest.net first, then fallbacks
+	allURLs := append(speedtestURLs, downloadTestURLs...)
 
 	// Create cancellation context with timeout
 	testCtx, cancel := context.WithTimeout(ctx, dt.testDuration)
 	defer cancel()
-
-	// Try different URL patterns for download test
-	urlPatterns := []string{
-		"%s/speedtest/random%dx%d.jpg",
-		"%s/speedtest/random%dx%d.png",
-		"%s/speedtest/garbage.php",
-		"%s/speedtest/upload.php",
-	}
-
-	sizes := []int{100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500}
 
 	// Run download threads
 	for i := 0; i < dt.numThreads; i++ {
@@ -85,6 +63,7 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 		go func(threadID int) {
 			defer wg.Done()
 
+			urlIndex := 0
 			for {
 				select {
 				case <-testCtx.Done():
@@ -92,47 +71,55 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 				default:
 				}
 
-				size := sizes[threadID%len(sizes)]
+				if urlIndex >= len(allURLs) {
+					urlIndex = 0 // Cycle through URLs
+				}
 
-				success := false
-				for _, pattern := range urlPatterns {
-					url := fmt.Sprintf(pattern, serverURL, size, size)
+				url := allURLs[urlIndex]
+				urlIndex++
 
-					req, err := http.NewRequestWithContext(testCtx, "GET", url, nil)
-					if err != nil {
-						continue
-					}
-					req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+				req, err := http.NewRequestWithContext(testCtx, "GET", url, nil)
+				if err != nil {
+					continue
+				}
+				req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-					resp, err := dt.client.Do(req)
-					if err != nil {
-						continue
-					}
+				resp, err := dt.client.Do(req)
+				if err != nil {
+					continue
+				}
 
-					if resp.StatusCode == http.StatusOK {
-						buf := make([]byte, 32*1024)
-						for {
-							n, err := resp.Body.Read(buf)
-							if n > 0 {
-								mu.Lock()
-								rateCalc.SetBytes(int64(n))
-								totalBytes += int64(n)
-								mu.Unlock()
-								success = true
-							}
-							if err != nil {
-								if err != io.EOF {
+				if resp.StatusCode == http.StatusOK {
+					buf := make([]byte, 32*1024)
+					for {
+						n, err := resp.Body.Read(buf)
+						if n > 0 {
+							mu.Lock()
+							rateCalc.SetBytes(int64(n))
+							totalBytes += int64(n)
+							mu.Unlock()
+
+							// Send progress update
+							if progress != nil {
+								select {
+								case progress <- ProgressInfo{
+									Rate:       rateCalc.Rate(),
+									BytesTotal: totalBytes,
+									Progress:   0.5,
+								}:
+								case <-testCtx.Done():
+								case <-ctx.Done():
 								}
-								break
 							}
 						}
-					}
-					resp.Body.Close()
-
-					if success {
-						break
+						if err != nil {
+							if err != io.EOF {
+							}
+							break
+						}
 					}
 				}
+				resp.Body.Close()
 			}
 		}(i)
 	}
@@ -141,11 +128,7 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 
 	// Send final progress
 	if progress != nil {
-		progress <- ProgressInfo{
-			Rate:       rateCalc.Rate(),
-			BytesTotal: totalBytes,
-			Progress:   1.0,
-		}
+		close(progress)
 	}
 
 	return nil
@@ -177,18 +160,25 @@ func RunSimpleDownloadTest(ctx context.Context, serverURL string) (*DownloadResu
 		errChan <- dt.Run(ctx, serverURL, progress)
 	}()
 
+	// Wait for completion or timeout
 	select {
 	case err := <-errChan:
 		result.Elapsed = time.Since(start)
+		// Get last progress
+		for p := range progress {
+			result.Bytes = p.BytesTotal
+			result.Bandwidth = int64(p.Rate)
+		}
 		if err != nil {
 			return nil, err
 		}
 	case <-ctx.Done():
 		result.Elapsed = time.Since(start)
+		for p := range progress {
+			result.Bytes = p.BytesTotal
+			result.Bandwidth = int64(p.Rate)
+		}
 		return result, ctx.Err()
-	case p := <-progress:
-		result.Bytes = p.BytesTotal
-		result.Bandwidth = int64(p.Rate)
 	}
 
 	return result, nil
