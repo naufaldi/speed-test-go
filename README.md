@@ -12,10 +12,10 @@
 A high-performance CLI tool written in Go that tests your internet connection speed (download and upload) and ping latency. This is a pure Go rewrite of the popular [sindresorhus/speed-test](https://github.com/sindresorhus/speed-test) Node.js CLI tool.
 
 <a href="https://bit.ly/49t6aTh">
-  <img src="docs/minimax-banner.png" alt="Get Discount Coding Plan 12$" width="100%">
+  <img src="docs/minimax-banner.png" alt="Get 12% Discount Coding Plan" width="100%">
 </a>
 
-**[Get 12$ Discount →](https://bit.ly/49t6aTh)**
+**[Get 12% Discount →](https://bit.ly/49t6aTh)**
 
 ---
 
