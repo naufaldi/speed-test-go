@@ -12,7 +12,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print the version number of speed-test",
 	Long:  `All software has versions. This is speed-test's`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("speed-test v1.0.0")
+		fmt.Println("speed-test v1.0.1")
 		os.Exit(0)
 	},
 }
