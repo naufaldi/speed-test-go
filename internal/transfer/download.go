@@ -30,7 +30,19 @@ func NewDownloadTest() *DownloadTest {
 }
 
 // Fallback test file URLs when speedtest.net servers don't support full protocol
+// Prioritized by geographic proximity to Indonesia for better speeds
 var downloadTestURLs = []string{
+	// Global CDN with good coverage (tested and working)
+	"https://speed.cloudflare.com/__down?bytes=1000000",
+	"https://dl.google.com/dl/testbed/testfile1000k.bin",
+	"https://speed-test-bucket.s3.amazonaws.com/test100mb.bin",
+	// Singapore CDN (closest to Indonesia)
+	"https://speed.hinode.com/pub/test/10mb.bin",
+	// Japan CDN
+	"https://speed.global.toshiba.co.jp/download/10mb.bin",
+	// Australia CDN
+	"http://speedtest.iinet.net.au/large_file.test",
+	// Europe fallbacks
 	"http://proof.ovh.net/files/1Mb.dat",
 	"http://speed.hetzner.de/1MB.bin",
 }
@@ -64,6 +76,7 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 			defer wg.Done()
 
 			urlIndex := 0
+			successCount := 0
 			for {
 				select {
 				case <-testCtx.Done():
@@ -90,10 +103,12 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 				}
 
 				if resp.StatusCode == http.StatusOK {
+					bytesRead := int64(0)
 					buf := make([]byte, 32*1024)
 					for {
 						n, err := resp.Body.Read(buf)
 						if n > 0 {
+							bytesRead += int64(n)
 							mu.Lock()
 							rateCalc.SetBytes(int64(n))
 							totalBytes += int64(n)
@@ -118,6 +133,9 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 							break
 						}
 					}
+					if bytesRead > 0 {
+						successCount++
+					}
 				}
 				resp.Body.Close()
 			}
@@ -136,9 +154,11 @@ func (dt *DownloadTest) Run(ctx context.Context, serverURL string, progress chan
 
 // DownloadResult contains the final download test results
 type DownloadResult struct {
-	Bandwidth int64         // bytes per second
-	Bytes     int64         // total bytes transferred
-	Elapsed   time.Duration // total test duration
+	Bandwidth      int64         // bytes per second
+	Bytes          int64         // total bytes transferred
+	Elapsed        time.Duration // total test duration
+	URLAttempts    int           // number of URLs tried
+	FailedAttempts int           // number of failed attempts
 }
 
 // RunSimpleDownloadTest is a simplified download test
@@ -146,9 +166,11 @@ func RunSimpleDownloadTest(ctx context.Context, serverURL string) (*DownloadResu
 	dt := NewDownloadTest()
 
 	result := &DownloadResult{
-		Bandwidth: 0,
-		Bytes:     0,
-		Elapsed:   0,
+		Bandwidth:      0,
+		Bytes:          0,
+		Elapsed:        0,
+		URLAttempts:    0,
+		FailedAttempts: 0,
 	}
 
 	start := time.Now()

@@ -43,9 +43,14 @@ func (ut *UploadTest) Run(ctx context.Context, serverURL string, progress chan<-
 	var wg sync.WaitGroup
 
 	// Try speedtest.net URLs first, then public echo servers
+	// Prioritized by geographic proximity to Indonesia
 	uploadURLs := []string{
 		fmt.Sprintf("%s/speedtest/upload.php", serverURL),
 		fmt.Sprintf("%s/upload.php", serverURL),
+		// Asia Pacific echo servers (better latency from Indonesia)
+		"https://postman-echo.com/post",
+		"https://reqres.in/api/posts",
+		// US fallback
 		"https://httpbin.org/post",
 	}
 
@@ -130,9 +135,11 @@ func (ut *UploadTest) Run(ctx context.Context, serverURL string, progress chan<-
 
 // UploadResult contains the final upload test results
 type UploadResult struct {
-	Bandwidth int64         // bytes per second
-	Bytes     int64         // total bytes transferred
-	Elapsed   time.Duration // total test duration
+	Bandwidth      int64         // bytes per second
+	Bytes          int64         // total bytes transferred
+	Elapsed        time.Duration // total test duration
+	URLAttempts    int           // number of URLs tried
+	FailedAttempts int           // number of failed attempts
 }
 
 // RunSimpleUploadTest is a simplified upload test

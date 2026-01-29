@@ -17,6 +17,7 @@ var (
 	serverIDFlag   string
 	numServersFlag int
 	timeoutFlag    time.Duration
+	progressFlag   bool
 )
 
 var rootCmd = &cobra.Command{
@@ -36,6 +37,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&jsonFlag, "json", "j", false, "Output the result as JSON")
 	rootCmd.Flags().BoolVarP(&bytesFlag, "bytes", "b", false, "Output the result in megabytes per second (MBps)")
 	rootCmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Output more detailed information")
+	rootCmd.Flags().BoolVarP(&progressFlag, "progress", "p", false, "Show progress during the test")
 	rootCmd.Flags().StringVarP(&serverIDFlag, "server", "s", "", "Specify a server ID to use")
 	rootCmd.Flags().IntVarP(&numServersFlag, "servers", "n", 5, "Number of closest servers to test for selection")
 	rootCmd.Flags().DurationVarP(&timeoutFlag, "timeout", "t", 30*time.Second, "Timeout for the speed test")
